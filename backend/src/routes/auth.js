@@ -3,6 +3,8 @@ import { body } from 'express-validator';
 import {
   register,
   login,
+  verifyOTP,
+  resendOTP,
   getMe,
   logout,
   updatePassword
@@ -25,8 +27,19 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required')
 ];
 
+const otpValidation = [
+  body('email').isEmail().withMessage('Please provide a valid email'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
+];
+
+const resendOTPValidation = [
+  body('email').isEmail().withMessage('Please provide a valid email')
+];
+
 router.post('/register', registerValidation, validate, register);
 router.post('/login', loginValidation, validate, login);
+router.post('/verify-otp', otpValidation, validate, verifyOTP);
+router.post('/resend-otp', resendOTPValidation, validate, resendOTP);
 router.get('/me', protect, getMe);
 router.post('/logout', protect, logout);
 router.put('/updatepassword', protect, updatePassword);

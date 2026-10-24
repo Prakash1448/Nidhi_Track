@@ -10,5 +10,12 @@ export default {
   jwtExpire: process.env.JWT_EXPIRE || '7d',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 5242880, // 5MB
   uploadPath: process.env.UPLOAD_PATH || './uploads',
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000'
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  
+  // Email configuration
+  emailHost: process.env.EMAIL_HOST,
+  emailPort: process.env.EMAIL_PORT || 587,
+  emailUser: process.env.EMAIL_USER,
+  emailPassword: process.env.EMAIL_PASSWORD,
+  emailFrom: process.env.EMAIL_FROM || 'noreply@aicte.gov.in'
 };

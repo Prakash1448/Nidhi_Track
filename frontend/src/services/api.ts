@@ -53,6 +53,7 @@ interface ApiResponse<T> {
   data?: T;
   message?: string;
   count?: number;
+  requiresOTP?: boolean; // For OTP flow
 }
 
 // ============================================================================
@@ -61,9 +62,24 @@ interface ApiResponse<T> {
 
 export const authAPI = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post<ApiResponse<{ user: any; token: string }>>('/auth/login', {
+    const response = await apiClient.post<ApiResponse<{ user: any; token: string; requiresOTP?: boolean; userId?: string }>>('/auth/login', {
       email,
       password,
+    });
+    return response.data;
+  },
+
+  verifyOTP: async (email: string, otp: string) => {
+    const response = await apiClient.post<ApiResponse<{ user: any; token: string }>>('/auth/verify-otp', {
+      email,
+      otp,
+    });
+    return response.data;
+  },
+
+  resendOTP: async (email: string) => {
+    const response = await apiClient.post<ApiResponse<null>>('/auth/resend-otp', {
+      email,
     });
     return response.data;
   },

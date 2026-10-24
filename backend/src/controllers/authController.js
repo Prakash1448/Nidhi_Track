@@ -1,6 +1,8 @@
 import User from '../models/User.js';
+import OTP from '../models/OTP.js';
 import AuditLog from '../models/AuditLog.js';
 import { generateToken } from '../middleware/auth.js';
+import { sendOTPEmail, generateOTP } from '../services/emailService.js';
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -61,7 +63,7 @@ export const register = async (req, res) => {
   }
 };
 
-// @desc    Login user
+// @desc    Login user (Step 1: Validate credentials)
 // @route   POST /api/auth/login
 // @access  Public
 export const login = async (req, res) => {
@@ -96,6 +98,9 @@ export const login = async (req, res) => {
       });
     }
 
+    // TEMPORARILY DISABLED OTP - Direct login for all users
+    // TODO: Re-enable OTP for institution users later
+    
     // Generate token
     const token = generateToken(user._id);
 
@@ -120,6 +125,7 @@ export const login = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      requiresOTP: false,
       message: 'Login successful',
       data: {
         user,
@@ -131,6 +137,196 @@ export const login = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Login failed'
+    });
+  }
+};
+
+// @desc    Verify OTP (Step 2: Complete institution login)
+// @route   POST /api/auth/verify-otp
+// @access  Public
+export const verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email and OTP'
+      });
+    }
+
+    // Find the most recent OTP for this email
+    const otpRecord = await OTP.findOne({
+      email: email.toLowerCase(),
+      isVerified: false
+    }).sort({ createdAt: -1 });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP not found or expired. Please request a new OTP.'
+      });
+    }
+
+    // Check if OTP is expired
+    if (new Date() > otpRecord.expiresAt) {
+      await OTP.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new OTP.'
+      });
+    }
+
+    // Check maximum attempts (3 attempts)
+    if (otpRecord.attempts >= 3) {
+      await OTP.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum OTP attempts exceeded. Please request a new OTP.'
+      });
+    }
+
+    // Verify OTP
+    if (otpRecord.otp !== otp) {
+      // Increment attempts
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+
+      return res.status(400).json({
+        success: false,
+        message: `Invalid OTP. ${3 - otpRecord.attempts} attempts remaining.`
+      });
+    }
+
+    // OTP is valid - mark as verified
+    otpRecord.isVerified = true;
+    await otpRecord.save();
+
+    // Get user details
+    const user = await User.findById(otpRecord.userId).populate('institutionId');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Update last login
+    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+
+    // Log audit
+    try {
+      await AuditLog.create({
+        userId: user._id,
+        action: 'LOGIN_OTP_VERIFIED',
+        entity: 'User',
+        entityId: user._id.toString(),
+        ipAddress: req.ip
+      });
+    } catch (auditError) {
+      console.warn('Audit log failed:', auditError.message);
+    }
+
+    // Delete the OTP record
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully',
+      data: {
+        user: user.toJSON(),
+        token
+      }
+    });
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'OTP verification failed'
+    });
+  }
+};
+
+// @desc    Resend OTP
+// @route   POST /api/auth/resend-otp
+// @access  Public
+export const resendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email'
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is institution
+    if (user.role !== 'institution') {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP is only required for institution users'
+      });
+    }
+
+    // Rate limiting: Check recent OTP requests (max 3 per hour)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentOTPs = await OTP.countDocuments({
+      email: user.email,
+      createdAt: { $gte: oneHourAgo }
+    });
+
+    if (recentOTPs >= 3) {
+      return res.status(429).json({
+        success: false,
+        message: 'Too many OTP requests. Please try again after 1 hour.'
+      });
+    }
+
+    // Generate new OTP
+    const otp = generateOTP();
+
+    // Delete old OTPs
+    await OTP.deleteMany({ email: user.email });
+
+    // Create new OTP
+    await OTP.create({
+      email: user.email,
+      otp: otp,
+      userId: user._id,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+    });
+
+    // Send OTP via email
+    try {
+      await sendOTPEmail(user.email, otp, user.name);
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'New OTP has been sent to your email'
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to resend OTP'
     });
   }
 };

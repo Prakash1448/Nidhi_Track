@@ -57,18 +57,23 @@ git clone https://github.com/Prakash1448/Nidhi_Track.git
 cd Nidhi_Track
 ```
 
-2. **Install frontend dependencies**
+2. **Install all dependencies (root, frontend, backend)**
 ```bash
-npm install
+npm run install:all
 ```
 
-3. **Install backend dependencies**
+Or install manually:
 ```bash
+# Backend
 cd backend
 npm install
+
+# Frontend
+cd ../frontend
+npm install
 ```
 
-4. **Configure environment variables**
+3. **Configure environment variables**
 
 Create `backend/.env`:
 ```env
@@ -80,22 +85,32 @@ NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
 ```
 
-5. **Seed the database**
+4. **Seed the database**
 ```bash
 cd backend
 npm run seed
 ```
 
-6. **Start the servers**
+5. **Start the servers**
+
+Option 1 - Start both together (from root):
+```bash
+npm run dev
+```
+
+Option 2 - Start separately:
 
 Backend:
 ```bash
 cd backend
 npm start
+# or for development with auto-reload
+npm run dev
 ```
 
 Frontend:
 ```bash
+cd frontend
 npm run dev
 ```
 
@@ -117,28 +132,35 @@ npm run dev
 
 ```
 Nidhi_Track/
-├── backend/
+├── frontend/              # React Frontend
 │   ├── src/
-│   │   ├── config/         # Database & app config
-│   │   ├── controllers/    # Route controllers
-│   │   ├── middleware/     # Auth & validation
-│   │   ├── models/         # MongoDB models
-│   │   ├── routes/         # API routes
-│   │   ├── utils/          # Helper functions
-│   │   └── server.js       # Express server
-│   └── package.json
-├── src/
-│   ├── components/         # React components
-│   ├── data/              # Mock data
-│   ├── pages/             # Page components
-│   ├── services/          # API services
-│   ├── types/             # TypeScript types
-│   ├── utils/             # Utility functions
-│   ├── views/             # Main views
-│   ├── App.tsx            # Main app component
-│   └── main.tsx           # Entry point
-└── package.json
-
+│   │   ├── components/    # React components
+│   │   ├── data/         # Mock data
+│   │   ├── pages/        # Page components
+│   │   ├── services/     # API services
+│   │   ├── types/        # TypeScript types
+│   │   ├── utils/        # Utility functions
+│   │   ├── views/        # Main views
+│   │   ├── App.tsx       # Main app component
+│   │   └── main.tsx      # Entry point
+│   ├── public/           # Static assets
+│   ├── index.html        # HTML template
+│   ├── vite.config.ts    # Vite config
+│   └── package.json      # Frontend dependencies
+├── backend/              # Node.js Backend
+│   ├── src/
+│   │   ├── config/       # Database & app config
+│   │   ├── controllers/  # Route controllers
+│   │   ├── middleware/   # Auth & validation
+│   │   ├── models/       # MongoDB models
+│   │   ├── routes/       # API routes
+│   │   ├── services/     # Business logic & email
+│   │   ├── utils/        # Helper functions
+│   │   └── server.js     # Express server
+│   └── package.json      # Backend dependencies
+├── package.json          # Root workspace config
+├── README.md             # Documentation
+└── .gitignore           # Git ignore rules
 ```
 
 ## 🔧 API Endpoints

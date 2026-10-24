@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Building2, Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { authAPI } from '../services/api';
+import { OTPVerification } from '../components/OTPVerification';
 
 type PortalType = 'institution' | 'aicte' | null;
+type LoginStep = 'portal-selection' | 'credentials' | 'otp-verification';
 
 interface LoginPageProps {
   onLoginSuccess: (user: any, token: string) => void;
 }
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
+  const [loginStep, setLoginStep] = useState<LoginStep>('portal-selection');
   const [selectedPortal, setSelectedPortal] = useState<PortalType>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,27 +26,41 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     try {
       const response = await authAPI.login(email, password);
       
-      if (response.success && response.data) {
-        const { user, token } = response.data;
-        
-        // Validate portal access
-        if (selectedPortal === 'institution' && user.role !== 'institution') {
-          setError('Access denied. This portal is for institutions only.');
-          setLoading(false);
-          return;
-        }
-        
-        if (selectedPortal === 'aicte' && user.role === 'institution') {
-          setError('Access denied. This portal is for AICTE officials only.');
+      console.log('Login response:', response); // Debug log
+      
+      if (response.success) {
+        // Check if OTP is required (for institution users)
+        // Backend returns requiresOTP at response level, not response.data level
+        if (response.requiresOTP) {
+          console.log('OTP Required! Showing OTP screen...');
+          setLoginStep('otp-verification');
           setLoading(false);
           return;
         }
 
-        // Store credentials
-        localStorage.setItem('nidhi_token', token);
-        localStorage.setItem('nidhi_user', JSON.stringify(user));
-        
-        onLoginSuccess(user, token);
+        // Direct login for AICTE users
+        if (response.data) {
+          const { user, token } = response.data;
+          
+          // Validate portal access
+          if (selectedPortal === 'institution' && user.role !== 'institution') {
+            setError('Access denied. This portal is for institutions only.');
+            setLoading(false);
+            return;
+          }
+          
+          if (selectedPortal === 'aicte' && user.role === 'institution') {
+            setError('Access denied. This portal is for AICTE officials only.');
+            setLoading(false);
+            return;
+          }
+
+          // Store credentials
+          localStorage.setItem('nidhi_token', token);
+          localStorage.setItem('nidhi_user', JSON.stringify(user));
+          
+          onLoginSuccess(user, token);
+        }
       } else {
         setError('Invalid credentials. Please try again.');
       }
@@ -55,14 +72,45 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   };
 
-  const handleBack = () => {
-    setSelectedPortal(null);
-    setEmail('');
-    setPassword('');
-    setError('');
+  const handleOTPVerified = (user: any, token: string) => {
+    // Store credentials
+    localStorage.setItem('nidhi_token', token);
+    localStorage.setItem('nidhi_user', JSON.stringify(user));
+    
+    onLoginSuccess(user, token);
   };
 
-  if (!selectedPortal) {
+  const handleBack = () => {
+    if (loginStep === 'otp-verification') {
+      setLoginStep('credentials');
+      setError('');
+    } else {
+      setLoginStep('portal-selection');
+      setSelectedPortal(null);
+      setEmail('');
+      setPassword('');
+      setError('');
+    }
+  };
+
+  const handlePortalSelect = (portal: PortalType) => {
+    setSelectedPortal(portal);
+    setLoginStep('credentials');
+  };
+
+  // OTP Verification Screen
+  if (loginStep === 'otp-verification') {
+    return (
+      <OTPVerification
+        email={email}
+        onVerifySuccess={handleOTPVerified}
+        onBack={handleBack}
+      />
+    );
+  }
+
+  // Portal Selection Screen
+  if (loginStep === 'portal-selection') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
         <div className="max-w-5xl w-full">
@@ -88,7 +136,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {/* Institution Portal */}
             <button
-              onClick={() => setSelectedPortal('institution')}
+              onClick={() => handlePortalSelect('institution')}
               className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8 border-2 border-transparent hover:border-indigo-500"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -134,7 +182,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
             {/* AICTE Portal */}
             <button
-              onClick={() => setSelectedPortal('aicte')}
+              onClick={() => handlePortalSelect('aicte')}
               className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 p-8 border-2 border-transparent hover:border-emerald-500"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
