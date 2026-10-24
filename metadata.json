@@ -1,0 +1,6 @@
+{
+  "name": "AICTE e-FDR Connect — Security Deposit Management Portal",
+  "description": "Enterprise portal for AICTE and technical institutions to streamline security deposit and Fixed Deposit Receipt (FDR) lifecycle, release readiness, and compliance (SIH26265).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
